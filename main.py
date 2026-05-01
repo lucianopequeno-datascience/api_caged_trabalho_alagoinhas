@@ -38,7 +38,7 @@ def gerar_meses_esperados():
 
 def processar_mes_incremental(ano_mes, ftp):
     ftp_dir = f"/pdet/microdados/NOVO CAGED/{ANO_ALVO}/{ano_mes}/"
-    file_name = f"CAGEDEST{ano_mes}.7z"
+    file_name = f"CAGEDMOV{ano_mes}.7z"
     local_7z_path = os.path.join(TMP_DIR, file_name)
     extract_path = os.path.join(TMP_DIR, f"extracted_{ano_mes}")
     
