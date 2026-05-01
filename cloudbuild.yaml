@@ -1,0 +1,26 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/oda-caged-incremental', '.']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/oda-caged-incremental']
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'jobs'
+      - 'deploy'
+      - 'oda-caged-incremental'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/oda-caged-incremental'
+      - '--region'
+      - 'southamerica-east1'
+      - '--memory'
+      - '4Gi'
+      - '--task-timeout'
+      - '3600s'
+      - '--max-retries'
+      - '1'
+      - '--set-env-vars'
+      - 'BUCKET_NOME=dados_alagoinhas_bronze,ROOT_PATH=trabalho,MUNICIPIO_IBGE=2900702,ANO_ALVO=2026'
