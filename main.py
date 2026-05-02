@@ -53,7 +53,7 @@ def processar_mes_incremental(ano_mes, ftp):
     try:
         print(f"\n🚀 Iniciando processamento de: {ano_mes}")
         
-        # Tenta navegar para o diretório do mês. Se falhar, o mês ainda não foi publicado.
+        # Tenta navegar para o diretório do mês
         try:
             ftp.cwd(f"/pdet/microdados/NOVO CAGED/{ANO_ALVO}/{ano_mes}/")
         except ftplib.error_perm:
@@ -84,32 +84,41 @@ def processar_mes_incremental(ano_mes, ftp):
         if 'municipio' not in col_map:
             raise KeyError("A coluna correspondente a 'municipio' não foi encontrada no cabeçalho.")
         
+        # O pulo do gato: ajustando o código do IBGE para o padrão de 6 dígitos do CAGED
+        codigo_caged = str(MUNICIPIO_IBGE)[:6]
+        coluna_municipio = col_map['municipio']
+        
         # Leitura em chunks com filtro dinâmico
-        print(f"⚙️ Processando e filtrando dados para o município {MUNICIPIO_IBGE}...")
+        print(f"⚙️ Processando e filtrando dados para o município (código CAGED: {codigo_caged})...")
         usecols = list(col_map.values())
         chunks_list = []
         
-        for chunk in pd.read_csv(txt_file, sep=';', usecols=usecols, chunksize=100000, dtype={col_map['municipio']: str}, encoding='utf-8', encoding_errors='ignore'):
-            df_filtered = chunk[chunk[col_map['municipio']] == str(MUNICIPIO_IBGE)]
+        for chunk in pd.read_csv(txt_file, sep=';', usecols=usecols, chunksize=100000, encoding='utf-8', encoding_errors='ignore'):
+            # Transforma a coluna em string, remove espaços e compara com o código de 6 dígitos
+            df_filtered = chunk[chunk[coluna_municipio].astype(str).str.strip() == codigo_caged]
+            
             if not df_filtered.empty:
                 chunks_list.append(df_filtered)
         
         if not chunks_list:
             print(f"⚠️ Nenhum registro encontrado para o município {MUNICIPIO_IBGE} no mês {ano_mes}.")
-            return True # Retorna True pois rodou com sucesso, apenas não havia dados locais
+            return True # Rodou com sucesso, apenas não havia dados
             
         # Consolidação e salvamento
         df_final = pd.concat(chunks_list, ignore_index=True)
         df_final.to_csv(csv_local_path, index=False)
         
-        # Upload para o Google Cloud Storage
+        # Upload para a camada Landing (Bronze) no Cloud Storage
         print("☁️ Subindo dados para o Cloud Storage...")
         storage_client = storage.Client()
         bucket = storage_client.bucket(BUCKET_NOME)
-        blob = bucket.blob(f"{ROOT_PATH}/landing/caged/ano_mes={ano_mes}/caged_{MUNICIPIO_IBGE}_{ano_mes}.csv")
+        
+        # O arquivo final no bucket mantém o código completo de 7 dígitos por convenção
+        caminho_blob = f"{ROOT_PATH}/landing/caged/ano_mes={ano_mes}/caged_{MUNICIPIO_IBGE}_{ano_mes}.csv"
+        blob = bucket.blob(caminho_blob)
         blob.upload_from_filename(csv_local_path)
         
-        print(f"✅ Sucesso: {ano_mes} concluído!")
+        print(f"✅ Sucesso: {ano_mes} concluído! ({len(df_final)} linhas salvas)")
         return True
         
     except Exception as e:
@@ -117,7 +126,7 @@ def processar_mes_incremental(ano_mes, ftp):
         raise # Força o container a registrar falha real (exit 1)
         
     finally:
-        # Limpeza rigorosa do diretório temporário para evitar estouro de memória no Cloud Run
+        # Limpeza rigorosa do diretório temporário
         for p in [local_7z_path, csv_local_path]:
             if os.path.exists(p): 
                 os.remove(p)
@@ -134,21 +143,17 @@ def main():
     
     ftp = None
     try:
-        # Conexão centralizada no FTP
         print(f"Conectando ao FTP do governo: {FTP_HOST}...")
         ftp = ftplib.FTP(FTP_HOST)
         ftp.login() 
         print("Conexão FTP estabelecida.")
         
-        # Gera a lista de meses do ano atual (01 a 12)
         meses = [f"{i:02d}" for i in range(1, 13)]
         
         for mes in meses:
             ano_mes = f"{ANO_ALVO}{mes}"
             sucesso = processar_mes_incremental(ano_mes, ftp)
             
-            # Opcional: Se a função retornar False (diretório não existe), 
-            # você pode decidir interromper o loop, pois os meses seguintes também não existirão.
             if sucesso is False and int(mes) > 1:
                 print("Fim dos dados disponíveis no servidor para este ano.")
                 break
