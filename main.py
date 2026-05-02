@@ -29,7 +29,11 @@ def get_column_mapping(df_header):
     cols_norm = {normalize_text(c): c for c in df_header.columns}
     
     # Colunas exigidas para a análise do CAGED
-    required = ['municipio', 'saldomovimentacao', 'competencia', 'cbo2002ocupacao', 'salario', 'idade', 'sexo', 'graudeinstrucao']
+    required = [
+    'municipio', 'saldomovimentacao', 'competencia', 'cbo2002ocupacao', 
+    'salario', 'idade', 'sexo', 'graudeinstrucao', 'secao', 'subclasse', 
+    'tamestab', 'racacor', 'indaprendiz', 'indpcd', 'tipomovimentacao'
+]
     
     for req in required:
         if req in cols_norm:
